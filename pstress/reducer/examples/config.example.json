@@ -1,0 +1,80 @@
+{
+  "_comment": "Example run configuration for pstress_reducer.py. Keys starting with '_' are ignored. Paths are relative to this file unless absolute.",
+
+  "workdir": "/tmp/pstress-reducer-work",
+
+  "server": {
+    "_comment": "basedir of a Percona Server / MySQL tarball; mysqld defaults to <basedir>/bin/mysqld (or mysqld-debug).",
+    "basedir": "/home/user/mysql-8.0/bld/install",
+    "mysqld": null,
+    "mysql_client": null,
+    "no_defaults": true,
+    "managed_args": true,
+    "extra_args": ["--innodb-buffer-pool-size=256M", "--log-error-verbosity=3"],
+    "template_datadir": null,
+    "initialize_args": [],
+    "user": "root",
+    "password_env": "PSTRESS_REDUCER_PASSWORD",
+    "credentials_file": null,
+    "startup_timeout": 120,
+    "shutdown_timeout": 30,
+    "cleanup": "kill",
+    "core_file": false
+  },
+
+  "hooks": {
+    "_comment": "Optional argv hooks. They get PRD_ATTEMPT_DIR, PRD_DATADIR, PRD_SOCKET, PRD_ERROR_LOG in the environment.",
+    "prepare": null,
+    "post_start": null,
+    "timeout": 120
+  },
+
+  "trial": {
+    "connect_timeout": 15,
+    "query_timeout": 120,
+    "replay_timeout": 600,
+    "setup_timeout": 1800,
+    "probe_timeout": 60,
+    "post_crash_wait": 30,
+    "sql_error_policy": {
+      "mode": "continue",
+      "invalid_on_codes": [],
+      "abort_on_codes": []
+    }
+  },
+
+  "oracle": {
+    "_comment": "crash: unexpected termination of the owned mysqld during replay AND all 'required' regexes in this attempt's replay-phase error log.",
+    "kind": "crash",
+    "required": ["Assertion failure: .*row0ins\\.cc", "got signal 6"],
+    "excluded": [],
+    "sources": ["error_log"],
+    "phase": "replay",
+    "probe": null,
+    "checker": null
+  },
+
+  "policy": {
+    "baseline_attempts": 10,
+    "candidate_max_valid": 10,
+    "candidate_accept_hits": 2,
+    "max_invalid_per_candidate": 3,
+    "final_attempts": 30,
+    "final_required_hits": 5,
+    "final_fallbacks": 2,
+    "max_total_attempts": 20000,
+    "max_seconds": 604800,
+    "max_consecutive_infra_failures": 5,
+    "probe_empty_workload": true,
+    "trim_unexecuted_tail": true,
+    "transaction_blocks": true,
+    "max_rounds": 20,
+    "low_hit_rate_ratio": 0.25
+  },
+
+  "retention": {
+    "keep_target_trials": 5,
+    "keep_other_trials": 20,
+    "keep_datadirs": false
+  }
+}
