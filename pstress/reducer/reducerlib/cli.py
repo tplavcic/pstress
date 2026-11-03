@@ -43,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--allow-empty-setup", action="store_true",
                    help="accept an empty initial state for step > 1 (not equivalent to the original run)")
     i.add_argument("--pin-use", action="store_true", help="pin a leading USE statement in every session")
+    i.add_argument("--duration-unit", choices=["us", "ms", "unknown"],
+                   help="unit of the timing prefix numbers (default: from the pstress revision)")
     i.add_argument("--pstress-revision", help="pstress revision that wrote the logs (default: detected from the ddl log)")
     i.add_argument("--out", required=True, help="output directory for manifest.json and the import report")
     i.add_argument("--force", action="store_true")

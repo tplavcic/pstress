@@ -152,6 +152,60 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(again.encode("utf-8", "surrogateescape"), b"INSERT INTO t VALUES ('\xff\xfe')")
 
 
+    def test_indented_diagnostic_text_is_not_unrecognized(self):
+        r = self.parse("fulltext search, total=>3, success=> 3, skipped=> 0\n"
+                       "    MATCH ... AGAINST on a table with a FULLTEXT index: natural language,\n"
+                       "    boolean modes.\n S SELECT 1 rows:1\n")
+        self.assertEqual(r.unrecognized, [])
+        self.assertEqual(len(r.statements), 1)
+
+
+class KeyringTests(unittest.TestCase):
+    """pstress-run writes <datadir>/component_keyring_file.cnf with an absolute path."""
+
+    def setUp(self):
+        self.d = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.d)
+
+    def make_datadir(self, path, keyring_inside=True):
+        path.mkdir(parents=True)
+        (path / "mysql.ibd").write_bytes(b"x")
+        if keyring_inside:
+            (path / "component_keyring_file").write_bytes(b"k")
+        (path / "component_keyring_file.cnf").write_text(json.dumps(
+            {"path": "/gone/rundir/333197/1/data/component_keyring_file", "read_only": False}))
+        return path
+
+    def test_attempt_copy_is_repointed(self):
+        from reducerlib.lifecycle import relocate_keyring_configs
+        dd = self.make_datadir(self.d / "attempt" / "data")
+        notes = relocate_keyring_configs(dd)
+        cfg = json.loads((dd / "component_keyring_file.cnf").read_text())
+        self.assertEqual(cfg["path"], str(dd / "component_keyring_file"))
+        self.assertFalse(cfg["read_only"])
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(relocate_keyring_configs(dd), [])  # idempotent
+
+    def test_keyring_outside_snapshot_left_alone(self):
+        from reducerlib.lifecycle import relocate_keyring_configs
+        dd = self.make_datadir(self.d / "data", keyring_inside=False)
+        notes = relocate_keyring_configs(dd)
+        self.assertIn("not inside the snapshot", notes[0])
+        self.assertEqual(json.loads((dd / "component_keyring_file.cnf").read_text())["path"],
+                         "/gone/rundir/333197/1/data/component_keyring_file")
+
+    def test_import_records_keyring(self):
+        from reducerlib.importer import build_setup
+        dd = self.make_datadir(self.d / "1" / "data")
+        setup = build_setup(f"snapshot:{dd}", create_databases=["test"], loader="mysql-cli",
+                            snapshot_checksum="metadata", external_files=[])
+        self.assertEqual(setup["keyring"], [{"config": "component_keyring_file.cnf",
+                                             "path": "/gone/rundir/333197/1/data/component_keyring_file",
+                                             "file_in_snapshot": True}])
+
+
 class DiscoveryTests(unittest.TestCase):
     def setUp(self):
         self.d = Path(tempfile.mkdtemp())

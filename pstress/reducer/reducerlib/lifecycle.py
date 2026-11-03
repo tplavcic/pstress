@@ -10,6 +10,7 @@ is ever signalled: no killall, no matching by process name.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import signal
@@ -121,6 +122,39 @@ def ensure_template(cfg: dict, workdir: Path) -> Path:
     return data
 
 
+def relocate_keyring_configs(datadir: Path) -> list[str]:
+    """Point datadir-local keyring component configs at this copy of the datadir.
+
+    pstress-run writes <datadir>/component_keyring_file.cnf with an absolute "path" to the
+    keyring file inside the datadir of the run that created it (and rewrites it with sed when
+    it carries a datadir to the next step).  A copied snapshot still points at the original
+    location, so the keyring cannot be read and encrypted tablespaces cannot be opened.  When
+    the referenced file exists in the copy, rewrite the path to the copy.  Only the attempt's
+    copy is changed, never the snapshot.
+    """
+    notes = []
+    for cnf in sorted(datadir.glob("component_keyring_*.cnf")):
+        try:
+            data = json.loads(cnf.read_text())
+        except (OSError, ValueError) as e:
+            notes.append(f"{cnf.name}: not readable as JSON ({e}); left unchanged")
+            continue
+        p = data.get("path") if isinstance(data, dict) else None
+        if not isinstance(p, str) or not p:
+            continue
+        target = datadir / Path(p).name
+        if Path(p) == target:
+            continue
+        if not target.exists():
+            notes.append(f"{cnf.name}: keyring {p} is not inside the snapshot; left unchanged "
+                         "(the server must be able to read it at that path)")
+            continue
+        data["path"] = str(target)
+        cnf.write_text(json.dumps(data, indent=1) + "\n")
+        notes.append(f"{cnf.name}: path {p} -> {target}")
+    return notes
+
+
 def _socket_path(attempt_dir: Path) -> Path:
     p = attempt_dir / "mysqld.sock"
     if len(str(p)) < 100:
@@ -168,6 +202,10 @@ class ManagedServer:
         if self.datadir.exists():
             safe_rmtree(self.datadir, self.owned_root)
         copy_tree_no_links(source_datadir, self.datadir)
+        if self.cfg["server"].get("relocate_keyring", True):
+            notes = relocate_keyring_configs(self.datadir)
+            if notes:
+                (self.attempt_dir / "prepare-notes.txt").write_text("\n".join(notes) + "\n")
         self.tmpdir.mkdir(parents=True, exist_ok=True)
         if self.socket.exists():
             self.socket.unlink()

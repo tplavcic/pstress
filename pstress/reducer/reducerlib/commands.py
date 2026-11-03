@@ -99,7 +99,8 @@ def cmd_import(args) -> int:
                 snapshot_checksum=args.snapshot_checksum, external_files=args.external_file or [],
                 include_failed=not args.exclude_failed, include_incomplete=args.include_incomplete,
                 skip_unframed=args.skip_unframed, allow_empty_setup=args.allow_empty_setup,
-                pstress_revision=args.pstress_revision, autocommit=autocommit)
+                pstress_revision=args.pstress_revision, autocommit=autocommit,
+                duration_unit=args.duration_unit)
     except ReducerError as e:
         rep = getattr(e, "report", None)
         if rep is not None:

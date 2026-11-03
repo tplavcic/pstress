@@ -23,6 +23,7 @@ anchored prefixes and one trailing " rows:<n>" field.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -259,6 +260,8 @@ def parse_thread_log(path: Path, *, duration_unit: str = "unknown",
             i += 1
             continue
         kind = _diag_kind(rest)
+        if not kind and re.match(r"^\s{2,}\S", rest):
+            kind = "<indented diagnostic text (e.g. multi-line option help)>"
         if kind:
             res.diagnostics[kind] = res.diagnostics.get(kind, 0) + 1
         elif rest:
@@ -376,7 +379,16 @@ def build_setup(spec: str, *, create_databases: list[str], loader: str,
             if not ep.exists():
                 raise ReducerError(f"external file not found: {ep}")
             ext.append({"path": str(ep), "sha256": sha256_file(ep) if ep.is_file() else sha256_tree(ep)})
-        return {"kind": "snapshot", "path": str(p), "checksum_mode": snapshot_checksum,
+        keyring = []
+        for cnf in sorted(p.glob("component_keyring_*.cnf")):
+            try:
+                kp = json.loads(cnf.read_text()).get("path")
+            except (OSError, ValueError, AttributeError):
+                kp = None
+            if isinstance(kp, str) and kp:
+                inside = (p / Path(kp).name).exists()
+                keyring.append({"config": cnf.name, "path": kp, "file_in_snapshot": inside})
+        return {"kind": "snapshot", "path": str(p), "checksum_mode": snapshot_checksum, "keyring": keyring,
                 "sha256": sha256_tree(p, snapshot_checksum), "create_databases": create_databases,
                 "external_files": ext,
                 "notes": "must be a consistent offline copy (clean shutdown or prepared backup); it is "
@@ -407,11 +419,12 @@ def import_pstress_logs(incident_dir: Path, *, step: int | None, node: str | Non
                         database: str, create_databases: list[str] | None, loader: str,
                         snapshot_checksum: str, external_files: list[str], include_failed: bool,
                         include_incomplete: bool, skip_unframed: bool, allow_empty_setup: bool,
-                        pstress_revision: str | None, autocommit: Any) -> tuple[dict, dict]:
+                        pstress_revision: str | None, autocommit: Any,
+                        duration_unit: str | None = None) -> tuple[dict, dict]:
     sets = discover(incident_dir)
     ls, notes = select_logset(sets, step, node)
     revision = pstress_revision or detect_revision(ls.directory, ls.node, ls.step)
-    dunit = DURATION_UNIT_BY_REVISION.get((revision or "")[:7], "unknown")
+    dunit = duration_unit or DURATION_UNIT_BY_REVISION.get((revision or "")[:7], "unknown")
 
     report: dict[str, Any] = {
         "selected": {"directory": str(ls.directory), "node": ls.node, "step": ls.step,
@@ -432,6 +445,9 @@ def import_pstress_logs(incident_dir: Path, *, step: int | None, node: str | Non
     inherent = len(limitations)
     if revision is None:
         limitations.append("pstress revision unknown: timing prefixes are kept raw and their unit is unknown")
+    elif dunit == "unknown":
+        notes.append(f"duration unit of pstress revision {revision} is not known to the importer; timing is kept "
+                     "raw (pass --duration-unit us if this build logs microseconds like cf59749)")
 
     if ls.step > 1 and setup_spec == "none" and not allow_empty_setup:
         prev = ls.directory.parent / str(ls.step - 1)
@@ -637,4 +653,8 @@ def render_report_text(report: dict, manifest: dict | None) -> str:
         for lim in manifest.get("capture", {}).get("limitations", []):
             out.append(f"LIMITATION: {lim}")
         out.append(f"Setup: {manifest['setup']['kind']} {manifest['setup'].get('path', '')}")
+        for k in manifest["setup"].get("keyring") or []:
+            where = ("inside the snapshot: each attempt's copy is repointed to its own file"
+                     if k["file_in_snapshot"] else "OUTSIDE the snapshot: it must stay readable at that path")
+            out.append(f"Keyring: {k['config']} -> {k['path']} ({where})")
     return "\n".join(out) + "\n"

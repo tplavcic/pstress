@@ -125,7 +125,8 @@ server gone, while processing <sql>        (CR_SERVER_GONE / CR_SERVER_LOST only
   Unknown lines are listed in the report. Raw files are never modified.
 * **Timing.** Timing prefixes are kept as raw metadata. At cf59749 both numbers are
   microseconds even though the suffix says `ms`. The unit is recorded from the pstress
-  revision, which is detected from the ddl log, and is never inferred from the suffix.
+  revision, which is detected from the ddl log, and is never inferred from the suffix. For a
+  revision the importer doesn't know, pass `--duration-unit us` (or `ms`) explicitly.
 * **Step and node selection.** You must choose the step explicitly when there are several
   (`--step`), and successive steps are never combined. More than one node is rejected,
   because multi-node replay is unsupported. `--node` imports a single node's sessions only,
@@ -138,6 +139,16 @@ server gone, while processing <sql>        (CR_SERVER_GONE / CR_SERVER_LOST only
   * `--setup snapshot:<datadir>`: a consistent offline copy, made by a clean shutdown or a
     prepared backup. It is checksummed, copied (never hard-linked) for every attempt, and
     never modified.
+
+  **Encryption keyrings.** pstress-run keeps the keyring file inside the datadir and writes
+  `<datadir>/component_keyring_file.cnf` with an absolute path into the run directory. That
+  path no longer exists after the trial is moved. Each attempt's copy of the snapshot gets
+  the `path` repointed to its own copy of the keyring (`server.relocate_keyring`, on by
+  default; see `trials/<n>/prepare-notes.txt`), so encrypted tablespaces open as they did in
+  the original run. The snapshot itself is not changed. The import report lists the keyring
+  configs it found, and says so if a keyring lies outside the snapshot. The global
+  `mysqld.my` and `lib/plugin/component_keyring_file.cnf` that pstress-run creates in the
+  basedir must still be present.
 
   Steps above 1 need the state left by the previous step. The importer refuses an empty
   setup for them unless you pass `--allow-empty-setup`, and it points at a saved

@@ -19,7 +19,8 @@
     "startup_timeout": 120,
     "shutdown_timeout": 30,
     "cleanup": "kill",
-    "core_file": false
+    "core_file": false,
+    "relocate_keyring": true
   },
 
   "hooks": {

@@ -34,6 +34,7 @@ DEFAULTS: dict[str, Any] = {
         "shutdown_timeout": 30,
         "cleanup": "kill",          # kill | shutdown  (how the server is stopped after evidence capture)
         "core_file": False,
+        "relocate_keyring": True,   # rewrite <datadir>/component_keyring_*.cnf "path" into each attempt copy
     },
     "hooks": {
         "prepare": None,            # argv run after the datadir is prepared, before start
@@ -246,6 +247,7 @@ def environment_fingerprint(cfg: dict, server_version: str | None, mysqld_sha256
         "user": srv["user"],
         "hooks": cfg["hooks"],
         "cleanup": srv["cleanup"],
+        "relocate_keyring": srv.get("relocate_keyring", True),
     }
 
 
