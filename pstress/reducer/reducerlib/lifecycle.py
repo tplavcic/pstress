@@ -335,6 +335,7 @@ class ManagedServer:
         self.exit = ServerExit(returncode=self.proc.returncode,
                                signal=(-self.proc.returncode if self.proc.returncode and self.proc.returncode < 0 else None),
                                expected=True, when=time.monotonic())
+        self.exit_phase = self.phase  # phase in which the reducer stopped it (e.g. "shutdown")
         REGISTRY.discard(self.proc)
         self._close_out()
 

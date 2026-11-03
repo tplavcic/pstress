@@ -238,6 +238,7 @@ class ReplayIntegration(unittest.TestCase):
         rec, _ = self.attempt(m, {"oracle": {"kind": "crash", "required": ["ready for connections"]}})
         self.assertEqual(rec["outcome"], "NO_TARGET")
         self.assertTrue(rec["server_exit"]["expected"])
+        self.assertEqual(rec["server_exit"]["phase"], "shutdown")
 
     def test_disconnect_without_crash_is_not_target(self):
         m = manifest([["SELECT 1", "KILL CONNECTION_ID()", "SELECT 2"], ["SELECT SLEEP(0.5)"]])
